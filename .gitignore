@@ -1,0 +1,32 @@
+# --- Flutter & Dart ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# --- IDEs & OS ---
+.idea/
+.vscode/
+*.iml
+*.log
+.DS_Store
+
+# --- Project Cleanup (80MB Culprits) ---
+firebase.exe
+firestore.rules
+firestore.indexes.json
+firebase-debug.log
+Employee_client.py
+
+# --- Local Databases (CRITICAL for SQL) ---
+*.db
+*.db-journal
+*.sqlite
+
+# --- Platform Specifics ---
+/android/app/debug
+/android/app/profile
+/android/app/release
+/windows/runner/*.exe
