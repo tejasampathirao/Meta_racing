@@ -1,44 +1,90 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
-import '../models/slot.dart';
+import '../models/booking.dart';
 import '../services/database_helper.dart';
 import '../services/mqtt_service.dart';
 
 class MetaRaceProvider with ChangeNotifier {
   User? _currentUser;
-  List<Slot> _slots = [];
+  List<Booking> _bookings = [];
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final MqttService _mqttService = MqttService();
 
+  final List<StreamSubscription> _subscriptions = [];
+
   User? get currentUser => _currentUser;
-  List<Slot> get slots => _slots;
+  List<Booking> get bookings => _bookings;
 
   MetaRaceProvider() {
     _mqttService.connect();
+    _setupListeners();
   }
 
-  Future<bool> register(String name, String identifier, String password) async {
+  void _setupListeners() {
+    _subscriptions.add(
+      _mqttService.onBookingCreateAck.listen((data) {
+        if (data['success'] == true && _currentUser != null) {
+          fetchBookings();
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      _mqttService.onBookingCancelAck.listen((data) {
+        if (data['success'] == true && _currentUser != null) {
+          fetchBookings();
+        }
+      }),
+    );
+
+    _subscriptions.add(
+      _mqttService.onBookingViewAck.listen((data) {
+        if (data['success'] == true) {
+          final list = data['bookings'] as List<dynamic>? ?? [];
+          _bookings = list
+              .map((b) => Booking.fromMap(b as Map<String, dynamic>))
+              .toList();
+          notifyListeners();
+        }
+      }),
+    );
+  }
+
+  Future<bool> register(
+    String name,
+    String email,
+    String phone,
+    String password, {
+    String role = 'user',
+  }) async {
     try {
-      User user = User(username: name, identifier: identifier, password: password);
+      User user = User(
+        name: name,
+        email: email,
+        phone: phone,
+        password: password,
+        role: role,
+      );
       await _dbHelper.registerUser(user);
-      
-      // Broadcast via MQTT with the unified identifier
-      _mqttService.sendRegisterPayload(name, identifier, password);
-      
+      _mqttService.sendRegisterPayload(
+        name,
+        email,
+        phone,
+        password,
+        role: role,
+      );
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  Future<bool> login(String identifier, String password) async {
-    User? user = await _dbHelper.loginUser(identifier, password);
+  Future<bool> login(String email, String password) async {
+    User? user = await _dbHelper.loginUser(email, password);
     if (user != null) {
       _currentUser = user;
-      
-      // Broadcast via MQTT with the unified identifier
-      _mqttService.sendLoginPayload(identifier, password);
-      
+      _mqttService.sendLoginPayload(email, password, role: user.role);
       notifyListeners();
       return true;
     }
@@ -46,56 +92,92 @@ class MetaRaceProvider with ChangeNotifier {
   }
 
   void logout() {
+    if (_currentUser?.id != null) {
+      _mqttService.sendLogoutPayload(_currentUser!.id!);
+    }
     _currentUser = null;
+    _bookings = [];
     notifyListeners();
   }
 
-  Future<void> fetchSlots() async {
-    _slots = await _dbHelper.getSlots();
+  void fetchBookings() {
+    if (_currentUser?.id != null) {
+      _mqttService.sendViewBookings(_currentUser!.id!);
+    }
+  }
+
+  void createBooking({
+    required String experience,
+    required String plan,
+    required String date,
+    required String timeSlot,
+    required int guests,
+    String message = '',
+  }) {
+    if (_currentUser == null) return;
+
+    // Add to local list immediately so UI updates
+    final booking = Booking(
+      name: _currentUser!.name,
+      email: _currentUser!.email,
+      phone: _currentUser!.phone,
+      experience: experience,
+      plan: plan,
+      date: date,
+      timeSlot: timeSlot,
+      guests: guests,
+      message: message,
+      status: 'confirmed',
+      customerId: _currentUser!.id,
+    );
+    _bookings.add(booking);
     notifyListeners();
+
+    _mqttService.sendBookingCreate(
+      name: _currentUser!.name,
+      email: _currentUser!.email,
+      phone: _currentUser!.phone,
+      experience: experience,
+      plan: plan,
+      date: date,
+      timeSlot: timeSlot,
+      guests: guests,
+      message: message,
+      customerId: _currentUser!.id,
+    );
   }
 
-  Future<bool> bookSlot(int slotId) async {
-    try {
-      if (_currentUser == null) return false;
-      await _dbHelper.updateSlotStatus(slotId, 1, _currentUser!.id);
-      final race = _slots.firstWhere((s) => s.id == slotId);
-      _mqttService.publishRaceEvent(
-        'grid_entry',
-        {
-          'id': race.id,
-          'track_name': race.trackName,
-          'time_label': race.timeLabel,
-          'car_model': race.carModel,
-        },
-        _currentUser!.id,
-      );
-      await fetchSlots();
-      return true;
-    } catch (e) {
-      return false;
+  void cancelBookingByIndex(int index) {
+    if (index < 0 || index >= _bookings.length) return;
+    final old = _bookings[index];
+    _bookings[index] = Booking(
+      id: old.id,
+      name: old.name,
+      email: old.email,
+      phone: old.phone,
+      experience: old.experience,
+      plan: old.plan,
+      date: old.date,
+      timeSlot: old.timeSlot,
+      guests: old.guests,
+      message: old.message,
+      status: 'cancelled',
+      customerId: old.customerId,
+    );
+    notifyListeners();
+    if (old.id != null) {
+      _mqttService.sendBookingCancel(old.id!);
     }
   }
 
-  Future<bool> cancelBooking(int slotId) async {
-    try {
-      if (_currentUser == null) return false;
-      final race = _slots.firstWhere((s) => s.id == slotId);
-      await _dbHelper.updateSlotStatus(slotId, 0, null);
-      _mqttService.publishRaceEvent(
-        'grid_exit',
-        {
-          'id': race.id,
-          'track_name': race.trackName,
-          'time_label': race.timeLabel,
-          'car_model': race.carModel,
-        },
-        _currentUser!.id,
-      );
-      await fetchSlots();
-      return true;
-    } catch (e) {
-      return false;
+  MqttService get mqttService => _mqttService;
+
+  @override
+  void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
     }
+    _mqttService.dispose();
+    super.dispose();
   }
 }

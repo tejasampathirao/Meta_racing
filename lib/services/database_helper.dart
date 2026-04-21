@@ -1,7 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/user.dart';
-import '../models/slot.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -11,112 +10,80 @@ class DatabaseHelper {
   DatabaseHelper._internal();
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null) {
+      // Ensure the role column exists on the cached connection
+      await _ensureRoleColumn(_database!);
+      return _database!;
+    }
     _database = await _initDatabase();
     return _database!;
+  }
+
+  Future<void> _ensureRoleColumn(Database db) async {
+    final cols = await db.rawQuery('PRAGMA table_info(users)');
+    final hasRole = cols.any((c) => c['name'] == 'role');
+    if (!hasRole) {
+      await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'");
+    }
   }
 
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'meta_race.db');
     return await openDatabase(
       path,
-      version: 2, // Upgraded version for schema change
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
-            identifier TEXT UNIQUE,
-            password TEXT
+            name TEXT,
+            email TEXT UNIQUE,
+            phone TEXT DEFAULT '',
+            password TEXT,
+            role TEXT DEFAULT 'user',
+            last_login_time TEXT
           )
         ''');
-
-        await db.execute('''
-          CREATE TABLE slots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            time_label TEXT,
-            track_name TEXT,
-            car_model TEXT,
-            is_booked INTEGER DEFAULT 0,
-            booked_by_id INTEGER,
-            FOREIGN KEY (booked_by_id) REFERENCES users (id)
-          )
-        ''');
-
-        List<Map<String, dynamic>> initialRaces = [
-          {'time_label': '09:00 AM', 'track_name': 'Monaco GP', 'car_model': 'F1-W14'},
-          {'time_label': '11:00 AM', 'track_name': 'Silverstone', 'car_model': 'GT3 RS'},
-          {'time_label': '02:00 PM', 'track_name': 'Nürburgring', 'car_model': 'SF-23'},
-          {'time_label': '04:00 PM', 'track_name': 'Spa-Francorchamps', 'car_model': '911 RSR'},
-        ];
-
-        for (var race in initialRaces) {
-          await db.insert('slots', {...race, 'is_booked': 0});
-        }
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          // Simplest way for prototype: drop and recreate
-          await db.execute('DROP TABLE IF EXISTS users');
-          await db.execute('''
-            CREATE TABLE users (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              username TEXT,
-              identifier TEXT UNIQUE,
-              password TEXT
-            )
-          ''');
+        if (oldVersion < 4) {
+          // Add role column to existing table
+          final cols = await db.rawQuery('PRAGMA table_info(users)');
+          final hasRole = cols.any((c) => c['name'] == 'role');
+          if (!hasRole) {
+            await db.execute(
+              "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
+            );
+          }
         }
-      }
+      },
     );
   }
 
-  // User methods
   Future<int> registerUser(User user) async {
     final db = await database;
     return await db.insert('users', user.toMap());
   }
 
-  Future<User?> loginUser(String identifier, String password) async {
+  Future<User?> loginUser(String email, String password) async {
     final db = await database;
     List<Map<String, dynamic>> maps = await db.query(
       'users',
-      where: 'identifier = ? AND password = ?',
-      whereArgs: [identifier, password],
+      where: 'email = ? AND password = ?',
+      whereArgs: [email, password],
     );
 
     if (maps.isNotEmpty) {
-      return User.fromMap(maps.first);
+      // Update last login time
+      final now = DateTime.now().toIso8601String();
+      await db.update(
+        'users',
+        {'last_login_time': now},
+        where: 'id = ?',
+        whereArgs: [maps.first['id']],
+      );
+      return User.fromMap({...maps.first, 'last_login_time': now});
     }
     return null;
-  }
-
-  // Slot methods
-  Future<List<Slot>> getSlots() async {
-    final db = await database;
-    List<Map<String, dynamic>> maps = await db.query('slots');
-    return List.generate(maps.length, (i) {
-      return Slot.fromMap(maps[i]);
-    });
-  }
-
-  Future<int> updateSlotStatus(int slotId, int isBooked, int? userId) async {
-    final db = await database;
-    return await db.update(
-      'slots',
-      {'is_booked': isBooked, 'booked_by_id': userId},
-      where: 'id = ?',
-      whereArgs: [slotId],
-    );
-  }
-
-  Future<int> cancelBooking(int slotId) async {
-    final db = await database;
-    return await db.update(
-      'slots',
-      {'is_booked': 0, 'booked_by_id': null},
-      where: 'id = ?',
-      whereArgs: [slotId],
-    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/meta_race_provider.dart';
+import 'booking_form_screen.dart';
 import 'service_bookings_screen.dart';
 
 class BookingScreen extends StatefulWidget {
@@ -22,10 +23,12 @@ class _BookingScreenState extends State<BookingScreen> {
     final user = provider.currentUser;
 
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         title: const Text('Meta Race Dashboard'),
-        backgroundColor: const Color(0xFF0D47A1),
-        foregroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1E1E1E),
+        foregroundColor: Colors.redAccent,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -33,7 +36,7 @@ class _BookingScreenState extends State<BookingScreen> {
             padding: const EdgeInsets.all(20),
             width: double.infinity,
             decoration: const BoxDecoration(
-              color: Color(0xFF0D47A1),
+              color: Color(0xFF1E1E1E),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(30),
                 bottomRight: Radius.circular(30),
@@ -42,12 +45,25 @@ class _BookingScreenState extends State<BookingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Welcome Back,', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                Text(
-                  user?.username ?? 'Racer',
-                  style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                const Text(
+                  'Welcome Back,',
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
-                const SizedBox(height: 10),
+                Text(
+                  user?.name ?? 'Racer',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (user?.lastLoginTime != null)
+                  Text(
+                    'Last login: ${_formatLoginTime(user!.lastLoginTime!)}',
+                    style: const TextStyle(color: Colors.white60, fontSize: 13),
+                  ),
+                const SizedBox(height: 4),
                 const Text(
                   'Manage your race services from here.',
                   style: TextStyle(color: Colors.white54),
@@ -55,55 +71,46 @@ class _BookingScreenState extends State<BookingScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.count(
-                crossAxisCount: 2, // 2 items per row
-                crossAxisSpacing: 15,
-                mainAxisSpacing: 15,
-                childAspectRatio: 1.0, // This makes them PERFECT SQUARES
-                children: [
-                  _buildSquareServiceCard(
-                    context,
-                    title: "GRID ENTRY",
-                    subtitle: "Book your race",
-                    icon: Icons.speed,
-                    color: Colors.redAccent,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const ServiceBookingsScreen()),
-                      );
-                    },
-                  ),
-                  _buildSquareServiceCard(
-                    context,
-                    title: "BOOKINGS",
-                    subtitle: "View history",
-                    icon: Icons.calendar_today,
-                    color: Colors.blueAccent,
-                    onTap: () {},
-                  ),
-                  _buildSquareServiceCard(
-                    context,
-                    title: "MY CARS",
-                    subtitle: "Manage fleet",
-                    icon: Icons.directions_car,
-                    color: Colors.orangeAccent,
-                    onTap: () {},
-                  ),
-                  _buildSquareServiceCard(
-                    context,
-                    title: "SETTINGS",
-                    subtitle: "App config",
-                    icon: Icons.settings,
-                    color: Colors.grey,
-                    onTap: () {},
-                  ),
-                ],
-              ),
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildServiceTile(
+                  icon: Icons.speed,
+                  title: 'BOOK NOW',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BookingFormScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildServiceTile(
+                  icon: Icons.calendar_today,
+                  title: 'BOOKINGS',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ServiceBookingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildServiceTile(
+                  icon: Icons.directions_car,
+                  title: 'MY CARS',
+                  onTap: () {},
+                ),
+                _buildServiceTile(
+                  icon: Icons.settings,
+                  title: 'SETTINGS',
+                  onTap: () {},
+                ),
+              ],
             ),
           ),
           // Logout Option at Bottom
@@ -115,10 +122,18 @@ class _BookingScreenState extends State<BookingScreen> {
               child: OutlinedButton.icon(
                 onPressed: _handleLogout,
                 icon: const Icon(Icons.logout, color: Colors.red),
-                label: const Text('LOGOUT SESSION', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'LOGOUT SESSION',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red, width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
                 ),
               ),
             ),
@@ -128,42 +143,61 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _buildSquareServiceCard(BuildContext context,
-      {required String title,
-      required String subtitle,
-      required IconData icon,
-      required Color color,
-      required VoidCallback onTap}) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(15),
+  String _formatLoginTime(String isoTime) {
+    try {
+      final dt = DateTime.parse(isoTime);
+      final hour = dt.hour > 12 ? dt.hour - 12 : dt.hour;
+      final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '${dt.day}/${dt.month}/${dt.year} $hour:$min $amPm';
+    } catch (_) {
+      return isoTime;
+    }
+  }
+
+  Widget _buildServiceTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Material(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Colors.redAccent.withValues(alpha: 0.3),
               ),
-              child: Icon(icon, color: color, size: 30),
             ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
+            child: Row(
+              children: [
+                Icon(icon, color: Colors.redAccent, size: 26),
+                const SizedBox(width: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Colors.white38,
+                  size: 22,
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       ),
     );

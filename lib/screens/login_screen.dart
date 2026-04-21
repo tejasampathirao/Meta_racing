@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/meta_race_provider.dart';
 import 'registration_screen.dart';
 import 'booking_screen.dart';
+import 'admin_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,21 +14,28 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _identifierController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. MINIMIZED BACKGROUND IMAGE
+          // Background image
           Positioned.fill(
             child: Container(
-              color: Colors.black,
+              color: const Color(0xFF121212),
               child: Opacity(
-                opacity: 0.6,
+                opacity: 0.3,
                 child: Image.asset(
                   'assets/meta-race.jpg',
                   fit: BoxFit.cover,
@@ -37,23 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // 2. STRONGER OVERLAY
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.4),
-                    Colors.black.withOpacity(0.85),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // 3. UPDATED FORM
+          // Form
           Center(
             child: SingleChildScrollView(
               child: Padding(
@@ -64,10 +56,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       "META RACE",
                       style: GoogleFonts.russoOne(
-                        color: Colors.white,
+                        color: Colors.redAccent,
                         fontSize: 36,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'SIGN IN TO CONTINUE',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                        letterSpacing: 2,
                       ),
                     ),
                     const SizedBox(height: 40),
@@ -75,40 +76,55 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(25),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.92),
-                        borderRadius: BorderRadius.circular(25),
+                        color: const Color(0xFF1E1E1E).withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.redAccent.withOpacity(0.3),
+                        ),
                       ),
                       child: Column(
                         children: [
-                          _buildTextField("Email or Phone Number", Icons.person_outline, controller: _identifierController),
+                          _buildTextField(
+                            "Email",
+                            Icons.email_outlined,
+                            controller: _emailController,
+                          ),
                           const SizedBox(height: 15),
-                          _buildTextField("Password", Icons.lock_outline,
-                              controller: _passwordController,
-                              isPassword: true,
-                              obscureText: _obscurePassword,
-                              onToggleVisibility: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          }),
-                          
-                          // ADDED: Forgot Password Button
+                          _buildTextField(
+                            "Password",
+                            Icons.lock_outline,
+                            controller: _passwordController,
+                            isPassword: true,
+                            obscureText: _obscurePassword,
+                            onToggleVisibility: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               onPressed: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Password reset link sent!')),
+                                  const SnackBar(
+                                    backgroundColor: Colors.redAccent,
+                                    content: Text('Password reset link sent!'),
+                                  ),
                                 );
                               },
                               child: const Text(
                                 "Forgot Password?",
-                                style: TextStyle(color: Color(0xFF0D47A1), fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
 
-                          const SizedBox(height: 15),
+                          const SizedBox(height: 10),
 
                           // LOGIN BUTTON
                           SizedBox(
@@ -116,25 +132,48 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 55,
                             child: ElevatedButton(
                               onPressed: () async {
-                                final success = await Provider.of<MetaRaceProvider>(context, listen: false)
-                                    .login(_identifierController.text, _passwordController.text);
+                                final provider = Provider.of<MetaRaceProvider>(
+                                  context,
+                                  listen: false,
+                                );
+                                final success = await provider.login(
+                                  _emailController.text.trim(),
+                                  _passwordController.text,
+                                );
                                 if (!mounted) return;
                                 if (success) {
+                                  final user = provider.currentUser;
                                   Navigator.pushReplacement(
                                     context,
-                                    MaterialPageRoute(builder: (context) => const BookingScreen()),
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          user != null && user.isAdmin
+                                          ? const AdminDashboardScreen()
+                                          : const BookingScreen(),
+                                    ),
                                   );
                                 } else {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Invalid credentials')),
+                                    const SnackBar(
+                                      content: Text('Invalid credentials'),
+                                    ),
                                   );
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0D47A1),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                backgroundColor: Colors.redAccent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                              child: const Text("LOGIN", style: TextStyle(color: Colors.white, fontSize: 18)),
+                              child: Text(
+                                "LOGIN",
+                                style: GoogleFonts.russoOne(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  letterSpacing: 2,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -146,10 +185,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const RegistrationScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => const RegistrationScreen(),
+                          ),
                         );
                       },
-                      child: const Text("New here? Create Account", style: TextStyle(color: Colors.white70)),
+                      child: RichText(
+                        text: const TextSpan(
+                          text: "New here? ",
+                          style: TextStyle(color: Colors.white54),
+                          children: [
+                            TextSpan(
+                              text: "Create Account",
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -161,26 +216,45 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildTextField(String label, IconData icon,
-      {required TextEditingController controller,
-      bool isPassword = false,
-      bool obscureText = false,
-      VoidCallback? onToggleVisibility}) {
+  Widget _buildTextField(
+    String label,
+    IconData icon, {
+    required TextEditingController controller,
+    bool isPassword = false,
+    bool obscureText = false,
+    VoidCallback? onToggleVisibility,
+  }) {
     return TextField(
       controller: controller,
       obscureText: isPassword ? obscureText : false,
+      style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
+        labelStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: Icon(icon, color: Colors.redAccent),
         suffixIcon: isPassword
             ? IconButton(
-                icon: Icon(obscureText ? Icons.visibility : Icons.visibility_off),
+                icon: Icon(
+                  obscureText ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.white38,
+                ),
                 onPressed: onToggleVisibility,
               )
             : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white24),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white24),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.8),
+        fillColor: const Color(0xFF121212),
       ),
     );
   }
