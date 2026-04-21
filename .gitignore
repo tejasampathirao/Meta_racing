@@ -1,3 +1,7 @@
+# --- Large binaries ---
+firebase.exe
+*.exe
+
 # --- Flutter & Dart ---
 .dart_tool/
 .flutter-plugins
