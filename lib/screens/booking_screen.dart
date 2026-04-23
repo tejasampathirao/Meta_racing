@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/meta_race_provider.dart';
 import 'service_bookings_screen.dart';
+import 'booking_history_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -67,8 +68,8 @@ class _BookingScreenState extends State<BookingScreen> {
                 children: [
                   _buildSquareServiceCard(
                     context,
-                    title: "GRID ENTRY",
-                    subtitle: "Book your race",
+                    title: "BOOK YOUR RACE",
+                    subtitle: "3 Slots Available",
                     icon: Icons.speed,
                     color: Colors.redAccent,
                     onTap: () {
@@ -84,15 +85,12 @@ class _BookingScreenState extends State<BookingScreen> {
                     subtitle: "View history",
                     icon: Icons.calendar_today,
                     color: Colors.blueAccent,
-                    onTap: () {},
-                  ),
-                  _buildSquareServiceCard(
-                    context,
-                    title: "MY CARS",
-                    subtitle: "Manage fleet",
-                    icon: Icons.directions_car,
-                    color: Colors.orangeAccent,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const BookingHistoryScreen()),
+                      );
+                    },
                   ),
                   _buildSquareServiceCard(
                     context,
@@ -154,7 +152,7 @@ class _BookingScreenState extends State<BookingScreen> {
             const SizedBox(height: 10),
             Text(
               title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),

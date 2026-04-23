@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/meta_race_provider.dart';
+import '../models/slot.dart';
 
 class ServiceBookingsScreen extends StatefulWidget {
   const ServiceBookingsScreen({super.key});
@@ -25,6 +26,84 @@ class _ServiceBookingsScreenState extends State<ServiceBookingsScreen> with Sing
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showRaceDetails(BuildContext context, Slot slot) {
+    final nameController = TextEditingController();
+    final dateController = TextEditingController(text: DateTime.now().toString().split(' ')[0]);
+    final provider = Provider.of<MetaRaceProvider>(context, listen: false);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("RACE DETAILS", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: "Driver Name",
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.redAccent)),
+              ),
+            ),
+            TextField(
+              controller: dateController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: "Race Date (YYYY-MM-DD)",
+                labelStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.redAccent)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("TRACK: ${slot.trackName}", style: const TextStyle(color: Colors.white70)),
+                  Text("TIME: ${slot.timeLabel}", style: const TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.grey),
+            Text(
+              "AVAILABILITY AFTER BOOKING: ${slot.capacity - slot.bookedCount - 1} SLOTS",
+              style: const TextStyle(color: Colors.green, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("EXIT", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              if (nameController.text.isNotEmpty) {
+                final success = await provider.confirmBooking(slot.id!, nameController.text, dateController.text);
+                if (success) {
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("RACE BOOKED!")));
+                  }
+                }
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter Driver Name")));
+              }
+            },
+            child: const Text("CONFIRM GRID ENTRY", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -59,56 +138,59 @@ class _ServiceBookingsScreenState extends State<ServiceBookingsScreen> with Sing
 
   Widget _buildAvailableSlotsTab() {
     final provider = Provider.of<MetaRaceProvider>(context);
-    final availableRaces = provider.slots.where((s) => !s.isBooked).toList();
 
     return Container(
-      color: const Color(0xFF121212), // Deep black background
+      color: const Color(0xFF121212),
       child: ListView.builder(
         padding: const EdgeInsets.all(12),
-        itemCount: availableRaces.length,
+        itemCount: provider.slots.length,
         itemBuilder: (context, index) {
-          final race = availableRaces[index];
+          final shift = provider.slots[index];
+          final isFull = shift.bookedCount >= shift.capacity;
+          final isAlreadyBookedByMe = shift.isBooked;
+
           return Card(
             color: const Color(0xFF1E1E1E),
             elevation: 10,
             margin: const EdgeInsets.symmetric(vertical: 10),
             shape: RoundedRectangleBorder(
-              side: const BorderSide(color: Colors.redAccent, width: 0.5),
+              side: BorderSide(color: isFull ? Colors.grey : Colors.redAccent, width: 0.5),
               borderRadius: BorderRadius.circular(16),
             ),
             child: ListTile(
               contentPadding: const EdgeInsets.all(20),
-              leading: const Icon(Icons.speed, color: Colors.redAccent, size: 45),
+              leading: Icon(Icons.speed, color: isFull ? Colors.grey : Colors.redAccent, size: 45),
               title: Text(
-                race.trackName?.toUpperCase() ?? "UNKNOWN TRACK",
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                shift.timeLabel,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
               ),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  Text("VEHICLE: ${race.carModel}", style: const TextStyle(color: Colors.redAccent, fontSize: 14)),
+                  Text(
+                    "Availability: ${shift.capacity - shift.bookedCount} / ${shift.capacity} Slots Left",
+                    style: TextStyle(
+                      color: isFull ? Colors.red : Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text("SESSION: ${race.timeLabel}", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                  Text("TRACK: ${shift.trackName}", style: const TextStyle(color: Colors.white70)),
                 ],
               ),
               trailing: ElevatedButton(
-                onPressed: () async {
-                  final success = await provider.bookSlot(race.id!);
-                  if (success && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        backgroundColor: Colors.redAccent,
-                        content: Text('GRID ENTRY CONFIRMED - START YOUR ENGINES'),
-                      ),
-                    );
-                  }
-                },
+                onPressed: (isFull || isAlreadyBookedByMe)
+                    ? null 
+                    : () => _showRaceDetails(context, shift),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
+                  backgroundColor: isAlreadyBookedByMe ? Colors.blue : Colors.redAccent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text("JOIN GRID", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(
+                  isAlreadyBookedByMe ? "BOOKED" : (isFull ? "FULL" : "BOOK"),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           );
@@ -119,11 +201,10 @@ class _ServiceBookingsScreenState extends State<ServiceBookingsScreen> with Sing
 
   Widget _buildMyBookingsTab() {
     final provider = Provider.of<MetaRaceProvider>(context);
-    final user = provider.currentUser;
-    final myBookings = provider.slots.where((s) => s.bookedById == user?.id).toList();
+    final myRaces = provider.slots.where((s) => s.bookedById == provider.currentUser?.id).toList();
 
     return Container(
-      color: const Color(0xFF121212),
+      color: Colors.black,
       child: Column(
         children: [
           const Padding(
@@ -134,15 +215,15 @@ class _ServiceBookingsScreenState extends State<ServiceBookingsScreen> with Sing
             ),
           ),
           Expanded(
-            child: myBookings.isEmpty
-                ? const Center(child: Text('NO ACTIVE TICKETS IN YOUR GRID', style: TextStyle(color: Colors.white54)))
+            child: myRaces.isEmpty
+                ? const Center(child: Text('NO ACTIVE TICKETS', style: TextStyle(color: Colors.white54)))
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: myBookings.length,
+                    itemCount: myRaces.length,
                     itemBuilder: (context, index) {
-                      final slot = myBookings[index];
+                      final race = myRaces[index];
                       return Card(
-                        color: const Color(0xFF1E1E1E),
+                        color: Colors.grey[900],
                         elevation: 5,
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         shape: RoundedRectangleBorder(
@@ -153,24 +234,22 @@ class _ServiceBookingsScreenState extends State<ServiceBookingsScreen> with Sing
                           contentPadding: const EdgeInsets.all(16),
                           leading: const Icon(Icons.confirmation_number, color: Colors.blueAccent, size: 40),
                           title: Text(
-                            slot.trackName?.toUpperCase() ?? "UNKNOWN TRACK",
+                            race.trackName?.toUpperCase() ?? "UNKNOWN TRACK",
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            "VEHICLE: ${slot.carModel}\nTIME: ${slot.timeLabel}",
+                            "TIME: ${race.timeLabel}",
                             style: const TextStyle(color: Colors.white70),
                           ),
-                          trailing: IconButton(
+                          trailing: TextButton.icon(
                             icon: const Icon(Icons.cancel, color: Colors.red),
+                            label: const Text("CANCEL RIDE", style: TextStyle(color: Colors.red)),
                             onPressed: () async {
-                              final success = await provider.cancelBooking(slot.id!);
-                              if (mounted && success) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    backgroundColor: Colors.grey,
-                                    content: Text('GRID EXIT CONFIRMED'),
-                                  ),
-                                );
+                              final success = await provider.cancelBooking(race.id!);
+                              if (success) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("RACE CANCELLED")));
+                                }
                               }
                             },
                           ),

@@ -8,10 +8,11 @@ class MqttService {
   final String server = '13.203.2.58'; 
   final String clientId = 'meta_race_client_${DateTime.now().millisecondsSinceEpoch}';
 
-
   static const String registerTopic = 'metarace/auth/register';
   static const String loginTopic = 'metarace/auth/login';
   static const String gridUpdateTopic = 'metarace/grid/updates';
+  static const String bookingCreateTopic = 'metarace/booking/create';
+  static const String bookingCancelTopic = 'metarace/booking/cancel';
 
   MqttService() {
     client = MqttServerClient(server, clientId);
@@ -31,24 +32,43 @@ class MqttService {
     client.connectionMessage = connMessage;
   }
 
+  bool _isConnecting = false;
+
   Future<bool> connect() async {
+    if (client.connectionStatus?.state == MqttConnectionState.connected) {
+      return true;
+    }
+    if (_isConnecting) {
+      print('MQTT: Connection attempt already in progress...');
+      return false;
+    }
+
+    _isConnecting = true;
     try {
       print('MQTT: Connecting to $server...');
       await client.connect();
       return client.connectionStatus?.state == MqttConnectionState.connected;
     } catch (e) {
       print('MQTT: Connection failed - $e');
-      client.disconnect();
+      if (client.connectionStatus?.state != MqttConnectionState.disconnected) {
+        try {
+          client.disconnect();
+        } catch (_) {}
+      }
       return false;
+    } finally {
+      _isConnecting = false;
     }
   }
 
   void _onConnected() {
     print('MQTT: Connected Successfully');
+    _isConnecting = false;
   }
 
   void _onDisconnected() {
     print('MQTT: Disconnected from Broker');
+    _isConnecting = false;
   }
 
   void _onSubscribed(String topic) {
@@ -112,5 +132,41 @@ class MqttService {
     };
 
     publish(gridUpdateTopic, payload);
+  }
+
+  void sendBookingCreate({
+    required String name,
+    required String date,
+    required Map<String, dynamic> raceData,
+    required int? userId,
+  }) {
+    final payload = {
+      'action': 'ticketbooking',
+      'timestamp': DateTime.now().toIso8601String(),
+      'data': {
+        'driver_name': name,
+        'race_date': date,
+        'slot_id': raceData['id'],
+        'track': raceData['track_name'],
+        'time_slot': raceData['time_label'],
+        'car_model': raceData['car_model'],
+        'remaining_slots': (raceData['capacity'] - raceData['booked_count'] - 1),
+        'user_id': userId,
+      },
+    };
+    publish(bookingCreateTopic, payload);
+  }
+
+  void sendBookingCancel(int bookingId, int? userId) {
+    final payload = {
+      'action': 'ticketcancellation',
+      'timestamp': DateTime.now().toIso8601String(),
+      'data': {
+        'booking_id': bookingId,
+        'user_id': userId,
+        'status': 'cancelled_by_user'
+      },
+    };
+    publish(bookingCancelTopic, payload);
   }
 }
